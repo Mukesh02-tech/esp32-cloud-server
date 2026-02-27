@@ -2,10 +2,8 @@ from flask import Flask, request, jsonify, render_template_string
 import sqlite3
 from datetime import datetime
 
-# Initialize the Flask application
 app = Flask(__name__)
 
-# --- 1. Database Setup ---
 def init_db():
     conn = sqlite3.connect('wearable.db')
     c = conn.cursor()
@@ -19,7 +17,6 @@ def init_db():
 
 init_db()
 
-# --- 2. The Frontend HTML & CSS (Aegis Dashboard) ---
 HTML_PAGE = """
 <!DOCTYPE html>
 <html lang="en">
@@ -29,151 +26,70 @@ HTML_PAGE = """
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
     <style>
-        :root {
-            --bg-main: #0a0c10;
-            --bg-panel: #11141a;
-            --bg-panel-light: #181c24;
-            --accent: #00d2ff;
-            --accent-dim: rgba(0, 210, 255, 0.2);
-            --danger: #ff3333;
-            --text-main: #e0e0e0;
-            --text-dim: #7a8b99;
-            --border: #1f2533;
-        }
-
-        body {
-            font-family: 'Share Tech Mono', monospace;
-            background-color: var(--bg-main);
-            color: var(--text-main);
-            margin: 0;
-            padding: 15px;
-            display: flex;
-            height: 100vh;
-            box-sizing: border-box;
-            overflow: hidden;
-        }
-
-        /* --- Layout Grid --- */
+        :root { --bg-main: #0a0c10; --bg-panel: #11141a; --accent: #00d2ff; --danger: #ff3333; --text-main: #e0e0e0; --border: #1f2533; }
+        body { font-family: 'Share Tech Mono', monospace; background-color: var(--bg-main); color: var(--text-main); margin: 0; padding: 15px; display: flex; height: 100vh; overflow: hidden; }
         .sidebar { width: 220px; border-right: 1px solid var(--border); padding-right: 15px; display: flex; flex-direction: column; }
         .main-content { flex-grow: 1; padding-left: 20px; display: flex; flex-direction: column; }
-        .top-bar { display: flex; justify-content: space-between; align-items: center; border: 1px solid var(--border); background: var(--bg-panel); padding: 10px 20px; margin-bottom: 15px; border-radius: 4px; }
+        .top-bar { display: flex; justify-content: space-between; align-items: center; border: 1px solid var(--border); background: var(--bg-panel); padding: 10px 20px; margin-bottom: 15px; }
         .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 15px; }
         .bottom-row { display: flex; gap: 15px; flex-grow: 1; min-height: 0; }
-        .map-wrapper { flex: 2; border: 1px solid var(--accent); border-radius: 4px; position: relative; box-shadow: 0 0 10px var(--accent-dim); }
-        #map { height: 100%; width: 100%; border-radius: 3px; }
+        .map-wrapper { flex: 2; border: 1px solid var(--accent); position: relative; }
+        #map { height: 100%; width: 100%; }
         .side-panels { flex: 1; display: flex; flex-direction: column; gap: 15px; }
-
-        /* --- Components --- */
-        h1, h2, h3 { margin: 0; font-weight: normal; }
-        .logo { color: var(--accent); font-size: 1.5rem; margin-bottom: 40px; text-shadow: 0 0 8px var(--accent-dim); }
-        .sidebar-menu { list-style: none; padding: 0; margin: 0; color: var(--text-dim); }
-        .sidebar-menu li { padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
-        .header-title { display: flex; align-items: center; gap: 15px; }
-        .shield-icon { color: var(--accent); font-size: 1.5rem; border: 1px solid var(--accent); padding: 5px 10px; border-radius: 4px; }
-        .subtitle { color: var(--text-dim); font-size: 0.8rem; letter-spacing: 1px; margin-top: 5px; }
-        .btn { background: transparent; color: var(--danger); border: 1px solid var(--danger); padding: 8px 15px; font-family: inherit; cursor: pointer; transition: 0.3s; text-transform: uppercase; font-size: 0.8rem; }
-        .btn:hover { background: var(--danger); color: #fff; box-shadow: 0 0 10px rgba(255, 51, 51, 0.4); }
-        .card { background: var(--bg-panel); border: 1px solid var(--border); padding: 15px; border-radius: 4px; display: flex; flex-direction: column; justify-content: space-between; }
-        .card-header { color: var(--text-dim); font-size: 0.8rem; display: flex; justify-content: space-between; margin-bottom: 15px; }
+        .card { background: var(--bg-panel); border: 1px solid var(--border); padding: 15px; display: flex; flex-direction: column; justify-content: space-between; }
+        .card-header { font-size: 0.8rem; display: flex; justify-content: space-between; margin-bottom: 15px; color: #7a8b99; }
         .card-value { font-size: 2rem; color: #fff; }
-        .card-sub { font-size: 0.7rem; color: var(--text-dim); }
-        .progress-bar { height: 4px; background: var(--bg-panel-light); margin-top: 10px; width: 100%; }
-        .progress-fill { height: 100%; background: var(--accent); width: 0%; box-shadow: 0 0 5px var(--accent); transition: width 0.5s ease; }
-        .terminal { background: var(--bg-panel); border: 1px solid var(--accent); border-radius: 4px; padding: 15px; flex: 2; overflow-y: auto; font-size: 0.8rem; box-shadow: 0 0 10px var(--accent-dim) inset; }
+        .terminal { background: var(--bg-panel); border: 1px solid var(--accent); padding: 15px; flex: 2; overflow-y: auto; font-size: 0.8rem; }
         .log-entry { margin-bottom: 5px; }
-        .log-time { color: var(--text-dim); }
+        .log-time { color: #7a8b99; }
         .log-msg { color: var(--accent); }
         .log-danger { color: var(--danger); font-weight: bold;}
-        .integrity-card { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; background: var(--bg-panel); border: 1px solid var(--border); border-radius: 4px; }
-        .integrity-val { font-size: 3rem; color: var(--accent); text-shadow: 0 0 10px var(--accent-dim); }
+        
+        /* NEW MASSIVE ALERT BANNER */
+        #emergency-banner {
+            display: none;
+            background-color: var(--danger);
+            color: white;
+            text-align: center;
+            padding: 15px;
+            font-size: 1.5rem;
+            font-weight: bold;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            animation: blink 1s infinite;
+        }
+        @keyframes blink { 50% { opacity: 0.5; } }
     </style>
 </head>
 <body>
     <div class="sidebar">
-        <div class="logo">● AEGIS.SYS</div>
-        <div style="margin-bottom: 30px;">
-            <div style="font-size: 0.7rem; color: var(--text-dim); margin-bottom: 10px;">DEVICE STATUS</div>
-            <div style="display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 5px;">
-                <span>BATTERY</span> <span style="color: #00ff00;">100%</span>
-            </div>
-            <div class="progress-bar" style="margin-bottom: 15px;"><div class="progress-fill" style="width: 100%; background: #00ff00;"></div></div>
-            <div style="display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 5px;">
-                <span>UPLINK SIGNAL</span> <span id="signal-text">--%</span>
-            </div>
-            <div class="progress-bar"><div class="progress-fill" id="signal-bar" style="width: 0%;"></div></div>
-        </div>
-        <ul class="sidebar-menu">
-            <li>> DIAGNOSTICS</li>
-            <li>> CONFIGURATION</li>
-            <li style="color: var(--text-main);">> RESPONDER-01</li>
-        </ul>
-        <div style="margin-top: auto; font-size: 0.6rem; color: var(--text-dim);">V.2.0.4 - BETA<br>SECURE CONNECTION</div>
+        <div style="color: var(--accent); font-size: 1.5rem; margin-bottom: 40px;">● AEGIS.SYS</div>
+        <div style="font-size: 0.7rem; color: #7a8b99; margin-bottom: 10px;">DEVICE STATUS</div>
+        <div style="margin-bottom: 15px;">BATTERY: <span style="color: #00ff00;">100%</span></div>
+        <div>UPLINK: <span id="signal-text">--%</span></div>
     </div>
 
     <div class="main-content">
         <div class="top-bar">
-            <div class="header-title">
-                <div class="shield-icon">🛡</div>
-                <div>
-                    <h2>EMERGENCY MONITOR <span style="color: var(--accent); font-size: 0.8rem;">V.2.0</span></h2>
-                    <div class="subtitle">LIVE FEED // SUBJECT ID: AW-2049 // SECURE UPLINK</div>
-                </div>
-            </div>
-            <div style="display: flex; gap: 10px;">
-                <button class="btn" onclick="simulateAlert('FALL')">SIMULATE FALL</button>
-                <button class="btn" onclick="simulateAlert('SCREAM')">SIMULATE SCREAM</button>
-            </div>
+            <h2>EMERGENCY MONITOR</h2>
+            <span id="val-conn" style="color: var(--accent);">CONNECTING...</span>
         </div>
 
+        <div id="emergency-banner">CHILD REQUEST ALERT!</div>
+
         <div class="stats-row">
-            <div class="card" id="card-bpm">
-                <div class="card-header"><span>HEART RATE</span> <span>♥</span></div>
-                <div>
-                    <span class="card-value" id="val-bpm">--</span> <span class="card-sub">BPM</span>
-                    <div class="card-sub" id="sub-bpm" style="margin-top: 5px;">AWAITING DATA</div>
-                </div>
-                <div class="progress-bar"><div class="progress-fill" id="bar-bpm" style="width: 0%;"></div></div>
-            </div>
-            <div class="card" id="card-noise">
-                <div class="card-header"><span>MIC SENSOR</span> <span>∿</span></div>
-                <div>
-                    <span class="card-value" id="val-noise">--</span>
-                    <div class="card-sub" id="sub-noise" style="margin-top: 5px;">NORMAL RANGE</div>
-                </div>
-                <div class="progress-bar"><div class="progress-fill" id="bar-noise" style="width: 0%;"></div></div>
-            </div>
-            <div class="card">
-                <div class="card-header"><span>LOCATION STATUS</span> <span>⌖</span></div>
-                <div>
-                    <span class="card-value" id="val-loc" style="font-size: 1.5rem;">TRACKING</span>
-                    <div class="card-sub" style="margin-top: 5px;">GPS ACTIVE</div>
-                </div>
-                <div class="progress-bar"><div class="progress-fill" style="width: 100%;"></div></div>
-            </div>
-            <div class="card" style="border-color: var(--accent); box-shadow: 0 0 10px var(--accent-dim) inset;">
-                <div class="card-header"><span>SYSTEM STATUS</span> <span>⚡</span></div>
-                <div style="margin-top: 10px;">
-                    <span style="font-size: 1.5rem; color: var(--accent);" id="val-conn">CONNECTING...</span>
-                    <div class="card-sub" id="val-time" style="margin-top: 5px;">DURATION: 0m 0s</div>
-                </div>
-            </div>
+            <div class="card"><div class="card-header">HEART RATE ♥</div><div class="card-value" id="val-bpm">--</div></div>
+            <div class="card"><div class="card-header">MIC SENSOR ∿</div><div class="card-value" id="val-noise" style="font-size: 1.5rem;">QUIET</div></div>
+            <div class="card"><div class="card-header">FALL STATUS ⚠</div><div class="card-value" id="val-fall" style="font-size: 1.5rem;">STABLE</div></div>
+            <div class="card"><div class="card-header">CHILD NEEDS 🛎️</div><div class="card-value" id="val-needs" style="font-size: 1.2rem; color: #00ff00;">ALL GOOD</div></div>
         </div>
 
         <div class="bottom-row">
-            <div class="map-wrapper">
-                <div id="map"></div>
-                <div style="position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.7); padding: 5px 10px; border: 1px solid var(--text-dim); z-index: 1000; font-size: 0.8rem; border-radius: 3px;">
-                    ⌖ GPS: <span id="overlay-lat">--</span>, <span id="overlay-lng">--</span> | <span style="color: var(--text-dim);">SOURCE: NEO-6M</span>
-                </div>
-            </div>
+            <div class="map-wrapper"><div id="map"></div></div>
             <div class="side-panels">
                 <div class="terminal" id="terminal">
-                    <div style="color: var(--accent); margin-bottom: 10px; border-bottom: 1px solid var(--border); padding-bottom: 5px;">SYSTEM TERMINAL_</div>
-                </div>
-                <div class="integrity-card">
-                    <div class="card-sub" style="margin-bottom: 10px;">SYSTEM INTEGRITY</div>
-                    <div class="integrity-val" id="integrity-text">100%</div>
-                    <div class="card-sub" style="margin-top: 10px;">ALL SYSTEMS NOMINAL</div>
+                    <div style="color: var(--accent); margin-bottom: 10px; border-bottom: 1px solid #1f2533; padding-bottom: 5px;">SYSTEM TERMINAL_</div>
                 </div>
             </div>
         </div>
@@ -182,115 +98,88 @@ HTML_PAGE = """
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
         var map = L.map('map', {zoomControl: false}).setView([11.9416, 79.8083], 13);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(map);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
         var marker = L.circleMarker([11.9416, 79.8083], { radius: 8, fillColor: "#00d2ff", color: "#000", weight: 2, opacity: 1, fillOpacity: 0.8 }).addTo(map);
 
         function addLog(msg, isDanger = false) {
             const term = document.getElementById('terminal');
             const time = new Date().toLocaleTimeString('en-US', {hour12:false});
             const colorClass = isDanger ? 'log-danger' : 'log-msg';
-            const html = `<div class="log-entry"><span class="log-time">[${time}] ></span> <span class="${colorClass}">${msg}</span></div>`;
-            term.innerHTML += html;
+            term.innerHTML += `<div class="log-entry"><span class="log-time">[${time}] ></span> <span class="${colorClass}">${msg}</span></div>`;
             term.scrollTop = term.scrollHeight; 
         }
 
-        addLog("Booting AEGIS.SYS kernel...");
-        addLog("Connecting to GSM Command Server...");
-
         let lastState = { food: false, water: false, restroom: false, fall: false, sound: false, panic: false };
-        let startTime = Date.now();
 
         setInterval(function() {
-            fetch('/api/latest')
-                .then(response => response.json())
-                .then(data => {
-                    if(data.error) return;
+            fetch('/api/latest').then(r => r.json()).then(data => {
+                if(data.error) return;
+                
+                document.getElementById('val-conn').innerText = "LINK ACTIVE";
+                document.getElementById('signal-text').innerText = "98%";
+                document.getElementById('val-bpm').innerText = data.bpm;
+                
+                // MIC LOGIC
+                if(data.sound) {
+                    document.getElementById('val-noise').innerText = "LOUD!";
+                    document.getElementById('val-noise').style.color = "var(--danger)";
+                    if(!lastState.sound) addLog("ALERT: High Noise / Crying Detected", true);
+                } else {
+                    document.getElementById('val-noise').innerText = "QUIET";
+                    document.getElementById('val-noise').style.color = "#fff";
+                }
+
+                // FALL LOGIC
+                if(data.fall) {
+                    document.getElementById('val-fall').innerText = "IMPACT!";
+                    document.getElementById('val-fall').style.color = "var(--danger)";
+                    if(!lastState.fall) addLog("CRITICAL: Fall Detected", true);
+                } else {
+                    document.getElementById('val-fall').innerText = "STABLE";
+                    document.getElementById('val-fall').style.color = "#fff";
+                }
+
+                // --- NEW BUTTON UI LOGIC ---
+                let needs = [];
+                if(data.food) needs.push("HUNGRY");
+                if(data.water) needs.push("THIRSTY");
+                if(data.restroom) needs.push("RESTROOM");
+
+                const banner = document.getElementById('emergency-banner');
+                const needsCard = document.getElementById('val-needs');
+
+                if (needs.length > 0) {
+                    // Flash the big banner and play an alert sound
+                    banner.style.display = "block";
+                    banner.innerText = "CHILD REQUEST: " + needs.join(" & ");
+                    needsCard.innerText = needs.join(" & ");
+                    needsCard.style.color = "var(--danger)";
                     
-                    document.getElementById('val-conn').innerText = "LINK ACTIVE";
-                    document.getElementById('signal-text').innerText = "98%";
-                    document.getElementById('signal-bar').style.width = "98%";
-                    
-                    let diff = Math.floor((Date.now() - startTime) / 1000);
-                    document.getElementById('val-time').innerText = `DURATION: ${Math.floor(diff/60)}m ${diff%60}s`;
+                    if(!lastState.food && data.food) { addLog("BUTTON PRESSED: HUNGRY", true); alert("⚠️ CHILD IS HUNGRY!"); }
+                    if(!lastState.water && data.water) { addLog("BUTTON PRESSED: THIRSTY", true); alert("⚠️ CHILD IS THIRSTY!"); }
+                    if(!lastState.restroom && data.restroom) { addLog("BUTTON PRESSED: RESTROOM", true); alert("⚠️ CHILD NEEDS RESTROOM!"); }
+                } else {
+                    banner.style.display = "none";
+                    needsCard.innerText = "ALL GOOD";
+                    needsCard.style.color = "#00ff00";
+                }
 
-                    document.getElementById('val-bpm').innerText = data.bpm;
-                    document.getElementById('bar-bpm').style.width = Math.min(100, (data.bpm / 160) * 100) + "%";
-                    if(data.panic) {
-                        document.getElementById('sub-bpm').innerText = "ELEVATED HEART RATE!";
-                        document.getElementById('sub-bpm').style.color = "var(--danger)";
-                        document.getElementById('bar-bpm').style.background = "var(--danger)";
-                        if(!lastState.panic) addLog("WARNING: Abnormal Heart Rate Detected (" + data.bpm + " BPM)", true);
-                    } else {
-                        document.getElementById('sub-bpm').innerText = "RESTING";
-                        document.getElementById('sub-bpm').style.color = "var(--text-dim)";
-                        document.getElementById('bar-bpm').style.background = "var(--accent)";
-                    }
-
-                    if(data.sound) {
-                        document.getElementById('val-noise').innerText = "LOUD";
-                        document.getElementById('sub-noise').innerText = "CRYING/SCREAM DETECTED";
-                        document.getElementById('sub-noise').style.color = "var(--danger)";
-                        document.getElementById('bar-noise').style.width = "100%";
-                        document.getElementById('bar-noise').style.background = "var(--danger)";
-                        if(!lastState.sound) addLog("ALERT: High Noise Level / Crying Detected", true);
-                    } else {
-                        document.getElementById('val-noise').innerText = "QUIET";
-                        document.getElementById('sub-noise').innerText = "NORMAL RANGE";
-                        document.getElementById('sub-noise').style.color = "var(--text-dim)";
-                        document.getElementById('bar-noise').style.width = "20%";
-                        document.getElementById('bar-noise').style.background = "var(--accent)";
-                    }
-
-                    if(data.fall) {
-                        document.getElementById('integrity-text').innerText = "CRITICAL";
-                        document.getElementById('integrity-text').style.color = "var(--danger)";
-                        if(!lastState.fall) addLog("CRITICAL: Fall Impact Detected via MPU-6050", true);
-                    } else if (document.getElementById('integrity-text').innerText !== "CRITICAL") {
-                        document.getElementById('integrity-text').innerText = "100%";
-                        document.getElementById('integrity-text').style.color = "var(--accent)";
-                    }
-
-                    if(data.food && !lastState.food) addLog("REQUEST: Subject pressed HUNGRY button.", true);
-                    if(data.water && !lastState.water) addLog("REQUEST: Subject pressed THIRSTY button.", true);
-                    if(data.restroom && !lastState.restroom) addLog("REQUEST: Subject pressed RESTROOM button.", true);
-
-                    if(data.lat !== 0 && data.lng !== 0) {
-                        let latlng = new L.LatLng(data.lat, data.lng);
-                        marker.setLatLng(latlng);
-                        map.setView(latlng, 15);
-                        document.getElementById('overlay-lat').innerText = data.lat.toFixed(4);
-                        document.getElementById('overlay-lng').innerText = data.lng.toFixed(4);
-                        if(lastState.lat === 0) addLog("GPS Uplink Established. Receiving Telemetry.");
-                    }
-                    lastState = data;
-                })
-                .catch(err => {
-                    document.getElementById('val-conn').innerText = "NO SIGNAL";
-                });
+                // GPS LOGIC
+                if(data.lat !== 0 && data.lng !== 0) {
+                    let latlng = new L.LatLng(data.lat, data.lng);
+                    marker.setLatLng(latlng);
+                    map.setView(latlng, 15);
+                }
+                lastState = data;
+            }).catch(e => document.getElementById('val-conn').innerText = "NO SIGNAL");
         }, 2000);
-
-        function simulateAlert(type) {
-            addLog(`MANUAL OVERRIDE: Simulating ${type}...`, true);
-            if(type === 'FALL') {
-                document.getElementById('integrity-text').innerText = "CRITICAL";
-                document.getElementById('integrity-text').style.color = "var(--danger)";
-            }
-            if(type === 'SCREAM') {
-                document.getElementById('val-noise').innerText = "LOUD";
-                document.getElementById('bar-noise').style.background = "var(--danger)";
-                document.getElementById('bar-noise').style.width = "100%";
-            }
-            setTimeout(() => addLog("Simulation complete. Awaiting clear..."), 3000);
-        }
     </script>
 </body>
 </html>
 """
 
-# --- 3. Server Routing ---
-@app.route('/', methods=['GET'])
-def index():
-    return render_template_string(HTML_PAGE)
+@app.route('/')
+def index(): return render_template_string(HTML_PAGE)
 
 @app.route('/api/data', methods=['POST'])
 def receive_data():
@@ -298,34 +187,23 @@ def receive_data():
         data = request.json
         conn = sqlite3.connect('wearable.db')
         c = conn.cursor()
-        c.execute('''INSERT INTO sensor_data 
-                     (timestamp, lat, lng, bpm, panic, fall, sound, food, water, restroom)
+        c.execute('''INSERT INTO sensor_data (timestamp, lat, lng, bpm, panic, fall, sound, food, water, restroom)
                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-                  (datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                   data.get('lat', 0.0), data.get('lng', 0.0), data.get('bpm', 0),
-                   data.get('panic', False), data.get('fall', False), data.get('sound', False),
-                   data.get('food', False), data.get('water', False), data.get('restroom', False)))
-        conn.commit()
-        conn.close()
+                  (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), data.get('lat',0.0), data.get('lng',0.0), data.get('bpm',0),
+                   data.get('panic',False), data.get('fall',False), data.get('sound',False), data.get('food',False), data.get('water',False), data.get('restroom',False)))
+        conn.commit(); conn.close()
         return jsonify({"status": "success"}), 200
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 400
+    except Exception as e: return jsonify({"status": "error", "message": str(e)}), 400
 
-@app.route('/api/latest', methods=['GET'])
+@app.route('/api/latest')
 def get_latest():
     conn = sqlite3.connect('wearable.db')
     c = conn.cursor()
     c.execute('SELECT * FROM sensor_data ORDER BY id DESC LIMIT 1')
     row = c.fetchone()
     conn.close()
-    
     if row:
-        return jsonify({
-            "timestamp": row[1], "lat": row[2], "lng": row[3], "bpm": row[4],
-            "panic": bool(row[5]), "fall": bool(row[6]), "sound": bool(row[7]),
-            "food": bool(row[8]), "water": bool(row[9]), "restroom": bool(row[10])
-        })
-    return jsonify({"error": "No data yet"})
+        return jsonify({"timestamp": row[1], "lat": row[2], "lng": row[3], "bpm": row[4], "panic": bool(row[5]), "fall": bool(row[6]), "sound": bool(row[7]), "food": bool(row[8]), "water": bool(row[9]), "restroom": bool(row[10])})
+    return jsonify({"error": "No data"})
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+if __name__ == '__main__': app.run(host='0.0.0.0', port=5000)
